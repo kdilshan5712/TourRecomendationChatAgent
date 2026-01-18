@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History | Wanderlust AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo"><i class="fas fa-rocket"></i> WANDERLUST AI</div>
+        <div class="nav-links">
+            <a href="{{ url_for('index') }}">Planner</a>
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <div class="glass-panel" style="width: 100%; max-width: 800px; margin: 0 auto;">
+            <h2 style="color: var(--primary); margin-bottom: 20px;">Your Adventures</h2>
+            
+            {% if bookings %}
+                {% for b in bookings %}
+                <div class="activity-item" style="margin-bottom: 20px; flex-direction: column; align-items: flex-start;">
+                    <div style="display:flex; justify-content:space-between; width:100%; margin-bottom:10px;">
+                        <h3 style="margin:0;">{{ b.plan.name }}</h3>
+                        <span class="tag">${{ b.total_cost }}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                        <span style="color:#ccc;">Booked on: {{ b.created_at.strftime('%Y-%m-%d') }}</span>
+                        <a href="{{ url_for('download_pdf', booking_id=b._id) }}" class="btn-success" style="text-decoration:none; padding:8px 15px; font-size:0.9rem;">
+                            <i class="fas fa-file-pdf"></i> Download PDF
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div style="text-align:center; padding:40px;">
+                    <p style="color:#ccc;">No trips booked yet.</p>
+                    <a href="{{ url_for('index') }}" style="color:var(--accent);">Plan your first trip</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

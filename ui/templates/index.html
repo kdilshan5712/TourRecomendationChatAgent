@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planner | Wanderlust AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body class="dashboard-body">
+    <nav class="navbar">
+        <div class="logo"><i class="fas fa-rocket"></i> WANDERLUST AI</div>
+        <div class="nav-links">
+            <a href="#">Planner</a>
+            <a href="{{ url_for('history') }}">History</a>
+            <a href="{{ url_for('logout') }}" style="color: var(--accent);">Logout</a>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <div class="glass-panel chat-panel">
+            <h2 style="margin-bottom: 10px; color: var(--primary);">Design Your Trip</h2>
+            <p style="color: #ccc; margin-bottom: 20px;">AI-Powered Optimization</p>
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <input type="number" id="budget" class="dash-input" placeholder="Budget ($)" value="1500">
+                <input type="number" id="days" class="dash-input" placeholder="Days" value="7">
+            </div>
+
+            <select id="month" class="dash-input" title="Select a month for your trip">
+                <option value="Any">Any Month</option>
+                <option value="January">January</option>
+                <option value="February">February</option>
+                <option value="March">March</option>
+                <option value="April">April</option>
+                <option value="May">May</option>
+                <option value="June">June</option>
+                <option value="July">July</option>
+                <option value="August">August</option>
+                <option value="September">September</option>
+                <option value="October">October</option>
+                <option value="November">November</option>
+                <option value="December">December</option>
+            </select>
+            
+            <textarea id="chatInput" placeholder="I want a beach honeymoon with some hiking..."></textarea>
+            
+            <button class="btn-primary" onclick="generatePlan()">
+                <i class="fas fa-magic"></i> Generate Itinerary
+            </button>
+        </div>
+
+        <!-- CHAT-LIKE PROGRESSIVE RESULT AREA -->
+        <div class="glass-panel result-panel" id="resultArea">
+            <!-- Live Map that updates as locations are revealed -->
+            <div id="map" style="height: 350px; width: 100%; border-radius: 15px; margin-bottom: 20px; background: #1a1a2e; display: none;"></div>
+            
+            <!-- Chat-style Progressive Display -->
+            <div id="chatMessages" style="max-height: 500px; overflow-y: auto; margin-bottom: 20px;">
+                <!-- Messages will appear here progressively -->
+            </div>
+            
+            <!-- Final Stats (appears after loading) -->
+            <div id="finalStats" style="display: none;">
+                <h1 id="planName" style="color:white; margin-bottom: 10px;"></h1>
+                <div class="stats-row" style="margin-bottom: 15px;">
+                    <span><i class="fas fa-calendar"></i> <span id="planDays">0</span> Days</span>
+                    <span><i class="fas fa-dollar-sign"></i> <span id="planCost">0</span></span>
+                    <span><i class="fas fa-star"></i> Score: <span id="planScore">0</span></span>
+                </div>
+                <p id="planDesc" style="line-height: 1.6; color: #ddd; margin-bottom: 15px;"></p>
+            </div>
+            
+            <!-- Timeline Container -->
+            <div id="timelineList" style="margin-top: 15px;"></div>
+
+            <!-- Action Buttons -->
+            <div id="actionButtons" style="display: none; gap: 10px; margin-top: 20px;">
+                <button class="btn-success" onclick="acceptPlan()"><i class="fas fa-check"></i> Book & Download PDF</button>
+                <button class="btn-danger" onclick="rejectPlan()"><i class="fas fa-redo"></i> Regenerate</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let currentPlan = null;
+    let excludedIds = [];
+    let map = null;
+    let mapMarkers = [];
+    let chatContainer = null;
+
+    async function generatePlan() {
+        const btn = document.querySelector('.btn-primary');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+        btn.disabled = true;
+        
+        // Show result area but HIDE map during generation
+        document.getElementById('resultArea').style.display = 'flex';
+        chatContainer = document.getElementById('chatMessages');
+        chatContainer.innerHTML = '';
+        document.getElementById('map').style.display = 'none';  // Hide map until ready
+        document.getElementById('finalStats').style.display = 'none';
+        document.getElementById('actionButtons').style.display = 'none';
+        
+        // Don't initialize map yet - wait for data
+        
+        try {
+            const requestData = {
+                text: document.getElementById('chatInput').value,
+                budget: document.getElementById('budget').value,
+                days: document.getElementById('days').value,
+                month: document.getElementById('month').value,
+                excluded_ids: excludedIds
+            };
+            
+            // Make actual API call
+            const res = await fetch('/plan', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(requestData)
+            });
+            
+            const data = await res.json();
+            
+            if(data.success) {
+                currentPlan = data;
+                await displayPlanDirectly(data);
+            }
+        } catch(e) {
+            addChatMessage('❌ Error', "Server Error: " + e, 'error');
+        } finally {
+            btn.innerHTML = '<i class="fas fa-magic"></i> Generate Itinerary';
+            btn.disabled = false;
+        }
+    }
+
+    function initializeMap() {
+        if(map) { 
+            map.remove(); 
+            map = null; 
+        }
+        mapMarkers = [];
+        
+        setTimeout(() => {
+            map = L.map('map').setView([7.87, 80.77], 7);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: 'OpenStreetMap', 
+                maxZoom: 18
+            }).addTo(map);
+            map.invalidateSize();
+        }, 100);
+    }
+
+    async function displayPlanDirectly(data) {
+        // Show tour name immediately
+        addChatMessage('✅ Tour Generated', `${data.plan.name}`, 'success');
+        
+        // Show complete itinerary first
+        await renderTimelineDirectly(data.activities);
+        
+        // NOW initialize and show map with all destinations
+        const destinations = data.plan.destinations || [];
+        if(destinations.length > 0) {
+            // Initialize map now that we have data
+            initializeMap();
+            
+            // Wait for map to be ready
+            setTimeout(() => {
+                // Add all markers instantly
+                destinations.forEach((dest, i) => {
+                    addDestinationToMap(dest, data.activities);
+                });
+                
+                // Show map after markers are added
+                document.getElementById('map').style.display = 'block';
+            }, 200);
+            
+            // Show destination list
+            const destList = destinations.map((d, i) => `${i+1}. ${d}`).join(' → ');
+            addChatMessage('📍 Your Journey', destList, 'destination');
+        }
+        
+        // Show final stats and buttons
+        displayFinalStats(data);
+        document.getElementById('actionButtons').style.display = 'flex';
+    }
+
+    function addChatMessage(label, message, type) {
+        const msgDiv = document.createElement('div');
+        msgDiv.style.cssText = `
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 10px;
+            animation: slideIn 0.3s ease-out;
+            background: ${type === 'agent' ? 'rgba(100, 100, 255, 0.1)' : 
+                        type === 'success' ? 'rgba(0, 255, 0, 0.1)' : 
+                        type === 'error' ? 'rgba(255, 0, 0, 0.1)' : 
+                        type === 'destination' ? 'rgba(255, 100, 0, 0.1)' :
+                        'rgba(255, 255, 255, 0.05)'};
+            border-left: 3px solid ${type === 'agent' ? '#6464ff' : 
+                                    type === 'success' ? '#00ff00' : 
+                                    type === 'error' ? '#ff0000' : 
+                                    type === 'destination' ? '#ff6400' :
+                                    '#ffffff'};
+        `;
+        
+        msgDiv.innerHTML = `
+            <div style="font-weight: bold; color: #ff6584; margin-bottom: 5px; font-size: 0.9rem;">
+                ${label}
+            </div>
+            <div style="color: #ddd; line-height: 1.5;">
+                ${message}
+            </div>
+        `;
+        
+        chatContainer.appendChild(msgDiv);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function addDestinationToMap(destination, activities) {
+        if(!map) return;
+        
+        // Find activities for this destination
+        const destActivities = activities.filter(a => a.city === destination);
+        if(destActivities.length === 0) return;
+        
+        const firstAct = destActivities[0];
+        if(!firstAct.lat) return;
+        
+        // Add marker instantly (no animation delay)
+        const marker = L.marker([firstAct.lat, firstAct.lon], {
+            icon: L.divIcon({
+                className: 'custom-marker',
+                html: `<div style="
+                    background: #ff6584;
+                    color: white;
+                    padding: 5px 10px;
+                    border-radius: 20px;
+                    font-weight: bold;
+                    box-shadow: 0 2px 10px rgba(255,101,132,0.5);
+                ">${destination}</div>`
+            })
+        }).addTo(map);
+        
+        marker.bindPopup(`<b>${destination}</b><br>${destActivities.length} activities`);
+        mapMarkers.push([firstAct.lat, firstAct.lon]);
+        
+        // Auto-fit map to show all markers after all are added
+        setTimeout(() => {
+            if(mapMarkers.length > 1) {
+                map.fitBounds(mapMarkers, {padding: [50, 50]});
+            } else {
+                map.setView([firstAct.lat, firstAct.lon], 10);
+            }
+        }, 100);
+    }
+
+    async function renderTimelineDirectly(activities) {
+        let days = {};
+        activities.forEach(a => {
+            let d = a.day || 1;
+            if(!days[d]) days[d] = { acts: [], total: 0, city: a.city };
+            days[d].acts.push(a);
+            days[d].total += (a.cost || 0);
+        });
+
+        const timeline = document.getElementById('timelineList');
+        timeline.innerHTML = '<h3 style="color:var(--accent); margin-bottom: 15px;"><i class="fas fa-list-ul"></i> Day-by-Day Itinerary</h3>';
+        
+        const sortedDays = Object.keys(days).sort((a,b)=>a-b);
+        
+        // Render all days at once without delays
+        for(let dayNum of sortedDays) {
+            const dayData = days[dayNum];
+            
+            const dayDiv = document.createElement('div');
+            dayDiv.style.cssText = 'margin-bottom: 20px;';
+            dayDiv.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px; margin-bottom:10px;">
+                    <h4 style="color:#FF6584; margin:0;">Day ${dayNum} - ${dayData.city || 'Tour'}</h4>
+                    <span class="tag" style="background:var(--primary); color:white; padding:2px 8px; border-radius:4px; font-size:0.8rem;">Cost: $${dayData.total}</span>
+                </div>
+            `;
+            
+            let timeOrder = {"Morning": 1, "Afternoon": 2, "Evening": 3};
+            dayData.acts.sort((a,b) => (timeOrder[a.time] || 4) - (timeOrder[b.time] || 4));
+
+            let activitiesHtml = '';
+            dayData.acts.forEach(act => {
+                let col = act.time === 'Morning' ? '#FFD700' : (act.time === 'Afternoon' ? '#FFA500' : '#8A2BE2');
+                activitiesHtml += `
+                    <div class="activity-item" style="display:flex; gap:15px; padding:10px; margin:5px 0; background:rgba(255,255,255,0.03); border-radius:8px; align-items:center;">
+                        <span style="font-size:0.85rem; color:${col}; width:80px; font-weight:bold;">${act.time}</span>
+                        <div style="flex:1;">${act.name}</div>
+                        <strong style="color:#ccc;">$${act.cost}</strong>
+                    </div>
+                `;
+            });
+            
+            dayDiv.innerHTML += activitiesHtml;
+            timeline.appendChild(dayDiv);
+        }
+    }
+
+    function displayFinalStats(data) {
+        document.getElementById('finalStats').style.display = 'block';
+        document.getElementById('planName').innerText = data.plan.name;
+        document.getElementById('planDays').innerText = data.total_days;
+        document.getElementById('planCost').innerText = data.total_cost;
+        document.getElementById('planScore').innerText = Math.round(data.score);
+        document.getElementById('planDesc').innerText = data.explanation;
+    }
+
+    async function acceptPlan() {
+        const res = await fetch('/book', { 
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'}, 
+            body: JSON.stringify(currentPlan) 
+        });
+        const data = await res.json();
+        if(data.success) {
+            addChatMessage('✅ Booked', 'Tour booked successfully! Generating PDF...', 'success');
+            setTimeout(() => {
+                window.location.href = `/download_pdf/${data.booking_id}`;
+                setTimeout(() => { window.location.href = "{{ url_for('history') }}"; }, 2000);
+            }, 1000);
+        }
+    }
+    
+    function rejectPlan() { 
+        if(currentPlan) { 
+            excludedIds.push(currentPlan.plan.id); 
+            generatePlan(); 
+        } 
+    }
+    
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    </script>
+    
+    <style>
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    @keyframes bounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+    }
+    
+    .activity-item {
+        transition: all 0.3s ease;
+    }
+    
+    .activity-item:hover {
+        background: rgba(255,255,255,0.08) !important;
+        transform: translateX(5px);
+    }
+    </style>
+</body>
+</html>
