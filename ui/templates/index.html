@@ -90,6 +90,7 @@
     let map = null;
     let mapMarkers = [];
     let chatContainer = null;
+    let lastUserGoals = {}; // Store user goals for training
     
     // Load and display sample tour on page load
     window.addEventListener('DOMContentLoaded', () => {
@@ -152,6 +153,13 @@
                 days: document.getElementById('days').value,
                 month: document.getElementById('month').value,
                 excluded_ids: excludedIds
+            };
+            
+            // Store user goals for later use in booking
+            lastUserGoals = {
+                budget: parseInt(requestData.budget) || 1500,
+                days: parseInt(requestData.days) || 7,
+                interests: [] // Can be extracted from text later
             };
             
             // Make actual API call
@@ -438,10 +446,16 @@
     }
 
     async function acceptPlan() {
+        // Add user goals to the booking data
+        const bookingData = {
+            ...currentPlan,
+            user_goals: lastUserGoals
+        };
+        
         const res = await fetch('/book', { 
             method: 'POST', 
             headers: {'Content-Type': 'application/json'}, 
-            body: JSON.stringify(currentPlan) 
+            body: JSON.stringify(bookingData) 
         });
         const data = await res.json();
         if(data.success) {

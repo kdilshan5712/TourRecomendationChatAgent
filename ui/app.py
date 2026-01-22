@@ -43,7 +43,36 @@ def extract_features(pkg, budget, days, interests):
         'days': pkg.get('days', 0),
         'interest_match': len(set(pkg.get('interests', [])) & set(interests)),
         'budget_ratio': pkg.get('price', 0) / max(budget, 1)
-    } 
+    }
+
+def save_to_training_csv(pkg, user_goals, satisfaction_score):
+    """
+    Save tour data to CSV for ML training
+    satisfaction_score: 5.0 for booked, 2.0 for regenerated/rejected
+    """
+    try:
+        u_budget = user_goals.get('budget', pkg.get('price', 1000))
+        u_days = user_goals.get('days', pkg.get('days', 7))
+        u_interests = user_goals.get('interests', [])
+        
+        # Extract features matching training data format
+        budget_ratio = pkg.get('price', 0) / max(u_budget, 1)
+        days_ratio = pkg.get('days', 1) / max(u_days, 1)
+        price = pkg.get('price', 0)
+        days = pkg.get('days', 0)
+        interest_match = len(set(pkg.get('interests', [])) & set(u_interests)) / max(len(u_interests), 1) if u_interests else 0.5
+        
+        # Format: satisfaction_score, budget_ratio, days_ratio, price, days, interest_match
+        row = [satisfaction_score, budget_ratio, days_ratio, price, days, interest_match]
+        
+        # Append to CSV
+        with open(CSV_PATH, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(row)
+        
+        print(f"✅ Saved to training CSV: satisfaction={satisfaction_score}")
+    except Exception as e:
+        print(f"⚠️ Failed to save training data: {e}") 
 
 # Configure Flask with explicit paths for static and template folders
 app = Flask(__name__, 
@@ -118,6 +147,21 @@ def plan():
         if not request.json:
             return jsonify({'success': False, 'message': 'Invalid request data'}), 400
         
+        # Check if this is a regenerate (rejected previous tour)
+        excluded_ids = request.json.get('excluded_ids', [])
+        if excluded_ids:
+            # User rejected previous tour - save negative feedback
+            try:
+                # Get the last rejected package
+                last_rejected_id = excluded_ids[-1] if excluded_ids else None
+                if last_rejected_id:
+                    rejected_pkg = mongo.db.tour_packages.find_one({'id': last_rejected_id})
+                    if rejected_pkg:
+                        # Save with low satisfaction score (2.0 = rejected)
+                        save_to_training_csv(rejected_pkg, request.json, 2.0)
+            except Exception as e:
+                print(f"⚠️ Failed to log regenerate: {e}")
+        
         # Use Advanced AI Agent - SPEED OPTIMIZED
         agent = AdvancedTourAgent(mongo.db.tour_packages, user_id=current_user.id)
         result = agent.plan_tour(request.json)
@@ -152,17 +196,13 @@ def book():
         'created_at': datetime.datetime.utcnow()
     }).inserted_id
     
+    # Save booked tour to training CSV with high satisfaction (5.0 = booked/accepted)
     try:
-        goals = data.get('user_goals', {})
+        user_goals = data.get('user_goals', {})
         pkg = data['plan']
-        u_budget = goals.get('budget', pkg['price'])
-        u_days = goals.get('days', pkg['days'])
-        u_interests = goals.get('interests', [])
-        features = extract_features(pkg, u_budget, u_days, u_interests)
-        with open(CSV_PATH, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(features + [5.0])
-    except: pass
+        save_to_training_csv(pkg, user_goals, 5.0)
+    except Exception as e:
+        print(f"⚠️ Failed to save booking to training CSV: {e}")
         
     return jsonify({'success': True, 'booking_id': str(booking_id)})
 
