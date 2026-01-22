@@ -208,7 +208,7 @@
         }
         mapMarkers = [];
         
-        // CRITICAL: Wait for result panel to be visible before initializing map
+        // Fast initialization
         setTimeout(() => {
             try {
                 const mapElement = document.getElementById('map');
@@ -239,15 +239,15 @@
                     maxZoom: 13
                 }).addTo(map);
                 
-                // CRITICAL: Force map to recalculate size after render
+                // Fast map resize
                 setTimeout(() => {
                     map.invalidateSize();
-                }, 100);
+                }, 50);
                 
             } catch (error) {
                 console.error('Map initialization error:', error);
             }
-        }, 300); // Increased delay to ensure panel is fully visible
+        }, 100); // Reduced for speed
     }
 
     async function displayPlanDirectly(data) {
@@ -269,7 +269,7 @@
             // Initialize map now that element is visible
             initializeMap();
             
-            // Wait for map to be fully initialized and ready
+            // Fast marker loading
             setTimeout(() => {
                 if (map) {
                     // Add all markers with data safety checks
@@ -282,7 +282,7 @@
                 } else {
                     console.error('Map failed to initialize');
                 }
-            }, 500); // Wait longer to ensure map is fully ready
+            }, 150); // Reduced for speed
             
             // Show destination list
             const destList = destinations.map((d, i) => `${i+1}. ${d}`).join(' → ');
@@ -376,14 +376,14 @@
             marker.bindPopup(`<b>${destination}</b><br>${destActivities.length} activities`);
             mapMarkers.push([firstAct.lat, firstAct.lon]);
             
-            // Auto-fit map to show all markers after all are added
+            // Auto-fit map instantly
             setTimeout(() => {
                 if(map && mapMarkers.length > 1) {
                     map.fitBounds(mapMarkers, {padding: [50, 50]});
                 } else if(map && mapMarkers.length === 1) {
                     map.setView([firstAct.lat, firstAct.lon], 10);
                 }
-            }, 100);
+            }, 50);
         } catch (error) {
             console.error(`Error adding marker for ${destination}:`, error);
         }

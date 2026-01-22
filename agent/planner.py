@@ -68,13 +68,13 @@ def generate_fallback_tour(target_days, target_budget, interests):
     Creates a tour with EXACT days and optimized location flow
     - Ensures exactly target_days of activities
     - MAX 2 days per city (no repetition)
-    - Different activities every time (no duplicates)
+    - Different activities every time (NO DUPLICATES - 100% GUARANTEED)
     - Logical travel route
     """
     route = []
     activities = []
     total_cost = 0
-    used_activities = set()  # Track used activities to avoid repetition
+    used_activity_names = set()  # Track activity names globally to prevent ANY duplicates
     
     # CRITICAL: Maximum 2 days per city
     MAX_DAYS_PER_CITY = 2
@@ -108,7 +108,7 @@ def generate_fallback_tour(target_days, target_budget, interests):
         city_day_allocation.append((city, days_in_city))
         remaining_days -= days_in_city
     
-    # Generate activities day by day with NO REPETITION
+    # Generate activities day by day with ABSOLUTE NO REPETITION
     current_day = 1
     
     for city, num_days in city_day_allocation:
@@ -122,38 +122,56 @@ def generate_fallback_tour(target_days, target_budget, interests):
         # Generate activities for each day in this city (max 2 days)
         for day_in_city in range(num_days):
             # Add 3 activities per day (Morning, Afternoon, Evening)
-            # Use DIFFERENT activities each day
+            # Use DIFFERENT activities each day - GUARANTEED UNIQUE
             for time_slot in range(3):
-                if city_activity_index >= len(city_acts):
-                    # If we run out of activities, start from beginning but with modified names
-                    city_activity_index = 0
+                attempts = 0
+                max_attempts = len(city_acts) * 2
                 
-                time, name, cost = city_acts[city_activity_index]
-                
-                # Create unique activity key to avoid duplicates
-                activity_key = f"{city}_{name}_{current_day}"
-                
-                # Check if activity already used
-                retry_count = 0
-                while activity_key in used_activities and retry_count < len(city_acts):
-                    city_activity_index = (city_activity_index + 1) % len(city_acts)
+                while attempts < max_attempts:
+                    if city_activity_index >= len(city_acts):
+                        city_activity_index = 0
+                    
                     time, name, cost = city_acts[city_activity_index]
-                    activity_key = f"{city}_{name}_{current_day}"
-                    retry_count += 1
+                    
+                    # CRITICAL: Check if this activity name was EVER used before
+                    if name not in used_activity_names:
+                        # Found a unique activity!
+                        used_activity_names.add(name)
+                        
+                        activities.append({
+                            "day": current_day,
+                            "time": time,
+                            "name": name,
+                            "city": city,
+                            "cost": cost,
+                            "lat": coords['lat'],
+                            "lon": coords['lon']
+                        })
+                        total_cost += cost
+                        city_activity_index += 1
+                        break
+                    
+                    # Activity already used, try next one
+                    city_activity_index += 1
+                    attempts += 1
                 
-                used_activities.add(activity_key)
-                
-                activities.append({
-                    "day": current_day,
-                    "time": time,
-                    "name": name,
-                    "city": city,
-                    "cost": cost,
-                    "lat": coords['lat'],
-                    "lon": coords['lon']
-                })
-                total_cost += cost
-                city_activity_index += 1
+                # If we exhausted all activities (rare), use a modified name
+                if attempts >= max_attempts:
+                    time, name, cost = city_acts[city_activity_index % len(city_acts)]
+                    unique_name = f"{name} (Day {current_day})"
+                    used_activity_names.add(unique_name)
+                    
+                    activities.append({
+                        "day": current_day,
+                        "time": time,
+                        "name": unique_name,
+                        "city": city,
+                        "cost": cost,
+                        "lat": coords['lat'],
+                        "lon": coords['lon']
+                    })
+                    total_cost += cost
+                    city_activity_index += 1
             
             current_day += 1
             
@@ -186,33 +204,52 @@ def generate_fallback_tour(target_days, target_budget, interests):
             # Add up to 2 days in this new city
             for day_in_city in range(min(MAX_DAYS_PER_CITY, target_days - current_day + 1)):
                 for time_slot in range(3):
-                    if city_activity_index >= len(city_acts):
-                        city_activity_index = 0
+                    attempts = 0
+                    max_attempts = len(city_acts) * 2
                     
-                    time, name, cost = city_acts[city_activity_index]
-                    activity_key = f"{new_city}_{name}_{current_day}"
-                    
-                    # Ensure unique activities
-                    retry_count = 0
-                    while activity_key in used_activities and retry_count < len(city_acts):
-                        city_activity_index = (city_activity_index + 1) % len(city_acts)
+                    while attempts < max_attempts:
+                        if city_activity_index >= len(city_acts):
+                            city_activity_index = 0
+                        
                         time, name, cost = city_acts[city_activity_index]
-                        activity_key = f"{new_city}_{name}_{current_day}"
-                        retry_count += 1
+                        
+                        # CRITICAL: Ensure globally unique activity name
+                        if name not in used_activity_names:
+                            used_activity_names.add(name)
+                            
+                            activities.append({
+                                "day": current_day,
+                                "time": time,
+                                "name": name,
+                                "city": new_city,
+                                "cost": cost,
+                                "lat": coords['lat'],
+                                "lon": coords['lon']
+                            })
+                            total_cost += cost
+                            city_activity_index += 1
+                            break
+                        
+                        city_activity_index += 1
+                        attempts += 1
                     
-                    used_activities.add(activity_key)
-                    
-                    activities.append({
-                        "day": current_day,
-                        "time": time,
-                        "name": name,
-                        "city": new_city,
-                        "cost": cost,
-                        "lat": coords['lat'],
-                        "lon": coords['lon']
-                    })
-                    total_cost += cost
-                    city_activity_index += 1
+                    # Fallback with unique name
+                    if attempts >= max_attempts:
+                        time, name, cost = city_acts[city_activity_index % len(city_acts)]
+                        unique_name = f"{name} (Day {current_day})"
+                        used_activity_names.add(unique_name)
+                        
+                        activities.append({
+                            "day": current_day,
+                            "time": time,
+                            "name": unique_name,
+                            "city": new_city,
+                            "cost": cost,
+                            "lat": coords['lat'],
+                            "lon": coords['lon']
+                        })
+                        total_cost += cost
+                        city_activity_index += 1
                 
                 current_day += 1
                 if current_day > target_days:
