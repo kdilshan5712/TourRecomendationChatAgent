@@ -27,43 +27,59 @@
 
 ## Hosting Options
 
-### Option 1: Heroku
+### Option 1: Vercel (Serverless - Best for Quick Deploy)
 
-1. **Install Heroku CLI**
+⚠️ **Note:** Vercel has 10-second timeout limit. ML features may be slower on cold starts.
 
-2. **Login and create app:**
+**Quick Deploy:**
+
+1. **Install Vercel CLI (optional):**
    ```bash
-   heroku login
-   heroku create your-app-name
+   npm install -g vercel
    ```
 
-3. **Set environment variables:**
-   ```bash
-   heroku config:set MONGO_URI="your_mongodb_uri"
-   heroku config:set SECRET_KEY="your_secret_key"
-   heroku config:set FLASK_ENV=production
-   ```
+2. **Deploy from dashboard:**
+   - Go to [vercel.com](https://vercel.com)
+   - Click "New Project"
+   - Import your GitHub repository
+   - Vercel auto-detects the configuration from `vercel.json`
 
-4. **Create Procfile:**
-   ```
-   web: cd ui && gunicorn app:app
-   ```
+3. **Add Environment Variables in Vercel Dashboard:**
+   - Go to Project Settings → Environment Variables
+   - Add `MONGO_URI` = `your_mongodb_connection_string`
+   - Add `SECRET_KEY` = `your_secret_key`
+   - Add `FLASK_ENV` = `production`
 
-5. **Add gunicorn to requirements.txt:**
-   ```bash
-   echo "gunicorn==20.1.0" >> requirements.txt
-   ```
+4. **Deploy:**
+   - Click "Deploy"
+   - Your app will be live at `your-project.vercel.app`
 
-6. **Deploy:**
-   ```bash
-   git add .
-   git commit -m "Deploy to Heroku"
-   git push heroku main
-   ```
+**Using CLI:**
+```bash
+# Login to Vercel
+vercel login
+
+# Deploy
+vercel
+
+# Add environment variables
+vercel env add MONGO_URI
+vercel env add SECRET_KEY
+
+# Deploy to production
+vercel --prod
+```
+
+**Files Created:**
+- ✅ `vercel.json` - Configuration
+- ✅ `index.py` - Entry point
+- ✅ `.vercelignore` - Ignore files
 
 ---
 
-### Option 2: Render
+### Option 2: Render (Recommended for Flask)
+
+**Best choice for Flask apps with ML!** Free tier with 750 hours/month.
 
 1. **Go to [render.com](https://render.com)**
 

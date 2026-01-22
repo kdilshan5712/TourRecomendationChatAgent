@@ -1,0 +1,28 @@
+# VERCEL DEPLOYMENT READY 
+ 
+## Files Created: 
+- vercel.json 
+- index.py 
+- .vercelignore 
+ 
+## Quick Deploy Steps: 
+ 
+1. Commit all changes: 
+   git add . 
+   git commit -m "Ready for Vercel deployment" 
+   git push 
+ 
+2. Go to vercel.com 
+ 
+3. Click "New Project" 
+ 
+4. Import your GitHub repository 
+ 
+5. Add Environment Variables: 
+   - MONGO_URI 
+   - SECRET_KEY 
+   - FLASK_ENV=production 
+ 
+6. Deploy! 
+ 
+Your app will be live at: your-project.vercel.app

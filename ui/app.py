@@ -275,4 +275,11 @@ def download_pdf(booking_id):
     buffer.seek(0)
     return send_file(buffer, as_attachment=True, download_name='My_Trip_Plan.pdf', mimetype='application/pdf')
 
-if __name__ == '__main__': app.run(debug=True)
+# For Vercel serverless deployment
+if __name__ != '__main__':
+    # Running on Vercel - disable debug mode
+    app.debug = False
+
+if __name__ == '__main__': 
+    # Local development
+    app.run(debug=True, host='0.0.0.0', port=5000)
