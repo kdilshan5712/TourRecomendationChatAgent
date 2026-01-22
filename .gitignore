@@ -1,0 +1,73 @@
+# Environment variables - NEVER commit secrets
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Flask
+instance/
+.webassets-cache
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# ML Models (optional - uncomment if models are large)
+# data/ml_model.pkl
+# data/scaler.pkl
+
+# User data (if sensitive)
+data/user_profiles/*.json
+data/feedback_data.json
+
+# Temporary files
+*.tmp
+*.bak
+temp/
+tmp/
+
+# OS specific
+Thumbs.db
+.DS_Store

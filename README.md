@@ -34,11 +34,12 @@ This isn't just another travel website. It's a **complete AI agent** that:
 # 1. Clone/Navigate to project
 cd tour_ai_final
 
-# 2. Install dependencies
-pip install -r requirements.txt
+# 2. Create environment file
+cp .env.example .env
+# Edit .env and add your MongoDB URI and Secret Key
 
-# 3. Setup database (generates 5,000 tour packages)
-python migrate_db.py
+# 3. Install dependencies
+pip install -r requirements.txt
 
 # 4. Start the agent
 cd ui
@@ -47,6 +48,24 @@ python app.py
 # 5. Open browser
 # http://localhost:5000
 ```
+
+### Environment Setup
+
+**Important:** Configure your environment variables before running:
+
+1. Copy the example file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` with your credentials:
+   ```env
+   MONGO_URI=your_mongodb_connection_string
+   SECRET_KEY=your_random_secret_key
+   FLASK_ENV=production
+   ```
+
+3. The `.env` file is git-ignored for security
 
 ### Try It Out
 

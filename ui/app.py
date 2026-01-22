@@ -7,28 +7,45 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import sys, os, datetime, csv, io
 import certifi
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
 
 # Fix path to allow importing agent
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
+sys.path.insert(0, parent_dir)
 
+# Import AI Agent modules - CRITICAL IMPORTS
+from agent.advanced_agent import AdvancedTourAgent
+from agent.nlp_utils import extract_keywords
+
+# Optional imports with fallback
 try:
-    from agent.agent import TourAgent
-    from agent.advanced_agent import AdvancedTourAgent  # NEW: Advanced AI Agent
-    from agent.utility import extract_features
-    from agent.external_apis import ExternalAPIIntegration  # NEW: Weather & APIs
+    from agent.external_apis import ExternalAPIIntegration
 except ImportError:
-    pass 
+    ExternalAPIIntegration = None
+    print("⚠️ External APIs not available")
+
+# Define extract_features function if not available
+def extract_features(pkg, budget, days, interests):
+    """Extract features from package for ML model"""
+    return {
+        'price': pkg.get('price', 0),
+        'days': pkg.get('days', 0),
+        'interest_match': len(set(pkg.get('interests', [])) & set(interests)),
+        'budget_ratio': pkg.get('price', 0) / max(budget, 1)
+    } 
 
 # Configure Flask with explicit paths for static and template folders
 app = Flask(__name__, 
     static_folder=os.path.join(current_dir, 'static'),
     template_folder=os.path.join(current_dir, 'templates'))
-app.config['SECRET_KEY'] = 'secret-key-123'
 
-# --- CRITICAL FIX: ADDED DATABASE NAME 'AITourReccomendation' ---
-app.config['MONGO_URI'] = "mongodb+srv://kavinduzandeepa14_db_user:ZXCVBNM1234@cluster0.9nt2oeo.mongodb.net/AITourReccomendation?retryWrites=true&w=majority&appName=Cluster0"
+# Load configuration from environment variables
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'secret-key-123')
+app.config['MONGO_URI'] = os.getenv('MONGO_URI', 'mongodb://localhost:27017/AITourReccomendation')
 
 # SSL Context for Atlas
 mongo = PyMongo(app, tlsCAFile=certifi.where())
@@ -86,16 +103,35 @@ def index(): return render_template('index.html', user=current_user)
 @app.route('/plan', methods=['POST'])
 @login_required
 def plan():
-    if mongo.db is None: return jsonify({'success': False, 'message': 'DB Error'})
-    
-    # Use Advanced AI Agent - SPEED OPTIMIZED
-    agent = AdvancedTourAgent(mongo.db.tour_packages, user_id=current_user.id)
-    result = agent.plan_tour(request.json)
-    
-    # Skip external API calls for faster response (weather etc.)
-    # Can be enabled later if needed
-    
-    return jsonify(result)
+    try:
+        if mongo.db is None: 
+            return jsonify({'success': False, 'message': 'Database connection error'}), 500
+        
+        # Validate request data
+        if not request.json:
+            return jsonify({'success': False, 'message': 'Invalid request data'}), 400
+        
+        # Use Advanced AI Agent - SPEED OPTIMIZED
+        agent = AdvancedTourAgent(mongo.db.tour_packages, user_id=current_user.id)
+        result = agent.plan_tour(request.json)
+        
+        # Skip external API calls for faster response (weather etc.)
+        # Can be enabled later if needed
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        # Log the error for debugging
+        print(f"ERROR in /plan endpoint: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # Return JSON error response
+        return jsonify({
+            'success': False, 
+            'message': f'Server error: {str(e)}',
+            'error_type': type(e).__name__
+        }), 500
 
 @app.route('/book', methods=['POST'])
 @login_required

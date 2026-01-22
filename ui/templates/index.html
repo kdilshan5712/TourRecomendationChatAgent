@@ -55,7 +55,7 @@
         <!-- CHAT-LIKE PROGRESSIVE RESULT AREA -->
         <div class="glass-panel result-panel" id="resultArea">
             <!-- Live Map that updates as locations are revealed -->
-            <div id="map" style="height: 350px; width: 100%; border-radius: 15px; margin-bottom: 20px; background: #1a1a2e; display: none;"></div>
+            <div id="map" style="height: 400px !important; min-height: 400px !important; width: 100%; border-radius: 15px; margin-bottom: 20px; background: linear-gradient(135deg, #1a1a2e 0%, #2d3561 100%); display: none; z-index: 1;"></div>
             
             <!-- Chat-style Progressive Display -->
             <div id="chatMessages" style="max-height: 500px; overflow-y: auto; margin-bottom: 20px;">
@@ -122,14 +122,32 @@
                 body: JSON.stringify(requestData)
             });
             
+            // Check if response is OK
+            if (!res.ok) {
+                const errorText = await res.text();
+                let errorMsg = `Server returned ${res.status}`;
+                
+                try {
+                    const errorData = JSON.parse(errorText);
+                    errorMsg = errorData.message || errorMsg;
+                } catch {
+                    errorMsg = `Server error: ${res.status} ${res.statusText}`;
+                }
+                
+                throw new Error(errorMsg);
+            }
+            
             const data = await res.json();
             
             if(data.success) {
                 currentPlan = data;
                 await displayPlanDirectly(data);
+            } else {
+                addChatMessage('❌ Error', data.message || 'Failed to generate plan', 'error');
             }
         } catch(e) {
-            addChatMessage('❌ Error', "Server Error: " + e, 'error');
+            console.error('Error details:', e);
+            addChatMessage('❌ Error', "Server Error: " + e.message, 'error');
         } finally {
             btn.innerHTML = '<i class="fas fa-magic"></i> Generate Itinerary';
             btn.disabled = false;
@@ -143,14 +161,36 @@
         }
         mapMarkers = [];
         
+        // CRITICAL: Wait for result panel to be visible before initializing map
         setTimeout(() => {
-            map = L.map('map').setView([7.87, 80.77], 7);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: 'OpenStreetMap', 
-                maxZoom: 18
-            }).addTo(map);
-            map.invalidateSize();
-        }, 100);
+            try {
+                const mapElement = document.getElementById('map');
+                if (!mapElement) {
+                    console.error('Map element not found');
+                    return;
+                }
+                
+                // Make sure map is visible
+                mapElement.style.display = 'block';
+                
+                // Initialize map
+                map = L.map('map').setView([7.87, 80.77], 7);
+                
+                // Add tile layer
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: 'OpenStreetMap', 
+                    maxZoom: 18
+                }).addTo(map);
+                
+                // CRITICAL: Force map to recalculate size after render
+                setTimeout(() => {
+                    map.invalidateSize();
+                }, 100);
+                
+            } catch (error) {
+                console.error('Map initialization error:', error);
+            }
+        }, 300); // Increased delay to ensure panel is fully visible
     }
 
     async function displayPlanDirectly(data) {
@@ -163,19 +203,29 @@
         // NOW initialize and show map with all destinations
         const destinations = data.plan.destinations || [];
         if(destinations.length > 0) {
-            // Initialize map now that we have data
+            // Show map element first (required for proper initialization)
+            const mapElement = document.getElementById('map');
+            if (mapElement) {
+                mapElement.style.display = 'block';
+            }
+            
+            // Initialize map now that element is visible
             initializeMap();
             
-            // Wait for map to be ready
+            // Wait for map to be fully initialized and ready
             setTimeout(() => {
-                // Add all markers instantly
-                destinations.forEach((dest, i) => {
-                    addDestinationToMap(dest, data.activities);
-                });
-                
-                // Show map after markers are added
-                document.getElementById('map').style.display = 'block';
-            }, 200);
+                if (map) {
+                    // Add all markers with data safety checks
+                    destinations.forEach((dest, i) => {
+                        addDestinationToMap(dest, data.activities);
+                    });
+                    
+                    // Force final resize after all markers added
+                    map.invalidateSize();
+                } else {
+                    console.error('Map failed to initialize');
+                }
+            }, 500); // Wait longer to ensure map is fully ready
             
             // Show destination list
             const destList = destinations.map((d, i) => `${i+1}. ${d}`).join(' → ');
@@ -220,41 +270,66 @@
     }
 
     function addDestinationToMap(destination, activities) {
-        if(!map) return;
+        // CRITICAL: Data safety checks
+        if(!map) {
+            console.warn('Map not initialized yet');
+            return;
+        }
+        
+        if (!activities || !Array.isArray(activities)) {
+            console.warn('Invalid activities data');
+            return;
+        }
         
         // Find activities for this destination
         const destActivities = activities.filter(a => a.city === destination);
-        if(destActivities.length === 0) return;
+        if(destActivities.length === 0) {
+            console.warn(`No activities found for ${destination}`);
+            return;
+        }
         
         const firstAct = destActivities[0];
-        if(!firstAct.lat) return;
         
-        // Add marker instantly (no animation delay)
-        const marker = L.marker([firstAct.lat, firstAct.lon], {
-            icon: L.divIcon({
-                className: 'custom-marker',
-                html: `<div style="
-                    background: #ff6584;
-                    color: white;
-                    padding: 5px 10px;
-                    border-radius: 20px;
-                    font-weight: bold;
-                    box-shadow: 0 2px 10px rgba(255,101,132,0.5);
-                ">${destination}</div>`
-            })
-        }).addTo(map);
+        // CRITICAL: Check if lat and lon exist and are valid numbers
+        if(!firstAct || 
+           typeof firstAct.lat !== 'number' || 
+           typeof firstAct.lon !== 'number' ||
+           isNaN(firstAct.lat) || 
+           isNaN(firstAct.lon)) {
+            console.warn(`Invalid coordinates for ${destination}:`, firstAct);
+            return;
+        }
         
-        marker.bindPopup(`<b>${destination}</b><br>${destActivities.length} activities`);
-        mapMarkers.push([firstAct.lat, firstAct.lon]);
-        
-        // Auto-fit map to show all markers after all are added
-        setTimeout(() => {
-            if(mapMarkers.length > 1) {
-                map.fitBounds(mapMarkers, {padding: [50, 50]});
-            } else {
-                map.setView([firstAct.lat, firstAct.lon], 10);
-            }
-        }, 100);
+        try {
+            // Add marker instantly (no animation delay)
+            const marker = L.marker([firstAct.lat, firstAct.lon], {
+                icon: L.divIcon({
+                    className: 'custom-marker',
+                    html: `<div style="
+                        background: #ff6584;
+                        color: white;
+                        padding: 5px 10px;
+                        border-radius: 20px;
+                        font-weight: bold;
+                        box-shadow: 0 2px 10px rgba(255,101,132,0.5);
+                    ">${destination}</div>`
+                })
+            }).addTo(map);
+            
+            marker.bindPopup(`<b>${destination}</b><br>${destActivities.length} activities`);
+            mapMarkers.push([firstAct.lat, firstAct.lon]);
+            
+            // Auto-fit map to show all markers after all are added
+            setTimeout(() => {
+                if(map && mapMarkers.length > 1) {
+                    map.fitBounds(mapMarkers, {padding: [50, 50]});
+                } else if(map && mapMarkers.length === 1) {
+                    map.setView([firstAct.lat, firstAct.lon], 10);
+                }
+            }, 100);
+        } catch (error) {
+            console.error(`Error adding marker for ${destination}:`, error);
+        }
     }
 
     async function renderTimelineDirectly(activities) {
@@ -342,6 +417,20 @@
     </script>
     
     <style>
+    /* CRITICAL: Force map height to prevent collapse */
+    #map {
+        height: 400px !important;
+        min-height: 400px !important;
+        background: linear-gradient(135deg, #1a1a2e 0%, #2d3561 100%) !important;
+        border: 2px solid rgba(108, 99, 255, 0.3) !important;
+        position: relative !important;
+    }
+    
+    #map .leaflet-container {
+        height: 100% !important;
+        background: transparent !important;
+    }
+    
     @keyframes slideIn {
         from {
             opacity: 0;
