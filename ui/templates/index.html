@@ -90,6 +90,45 @@
     let map = null;
     let mapMarkers = [];
     let chatContainer = null;
+    
+    // Load and display sample tour on page load
+    window.addEventListener('DOMContentLoaded', () => {
+        loadSampleTour();
+    });
+    
+    async function loadSampleTour() {
+        try {
+            const response = await fetch('/data/sample_tour_mirissa_galle.json');
+            if (!response.ok) {
+                console.warn('Sample tour not available');
+                return;
+            }
+            const tourData = await response.json();
+            
+            // Format the tour data to match expected structure
+            const formattedData = {
+                plan: {
+                    id: tourData.id,
+                    name: tourData.name,
+                    destinations: tourData.destinations,
+                    days: tourData.days,
+                    price: tourData.price
+                },
+                activities: tourData.activities,
+                total_days: tourData.days,
+                total_cost: tourData.price,
+                score: 9.5,
+                explanation: `Experience the stunning beaches of Mirissa and the historic charm of Galle Fort in this comprehensive ${tourData.days}-day journey along Sri Lanka's southern coast.`
+            };
+            
+            currentPlan = formattedData;
+            
+            // Display the tour
+            displayPlanDirectly(formattedData);
+        } catch (error) {
+            console.error('Error loading sample tour:', error);
+        }
+    }
 
     async function generatePlan() {
         const btn = document.querySelector('.btn-primary');
@@ -173,13 +212,23 @@
                 // Make sure map is visible
                 mapElement.style.display = 'block';
                 
-                // Initialize map
-                map = L.map('map').setView([7.87, 80.77], 7);
+                // Initialize map centered on Sri Lanka with bounds restriction
+                map = L.map('map', {
+                    center: [7.87, 80.77],
+                    zoom: 8,
+                    minZoom: 7,
+                    maxZoom: 13,
+                    maxBounds: [
+                        [5.9, 79.5],  // Southwest corner of Sri Lanka
+                        [9.9, 82.0]   // Northeast corner of Sri Lanka
+                    ],
+                    maxBoundsViscosity: 1.0
+                });
                 
                 // Add tile layer
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: 'OpenStreetMap', 
-                    maxZoom: 18
+                    maxZoom: 13
                 }).addTo(map);
                 
                 // CRITICAL: Force map to recalculate size after render

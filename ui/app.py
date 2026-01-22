@@ -228,6 +228,15 @@ def agent_status():
 @app.route('/logout')
 def logout(): logout_user(); return redirect(url_for('login'))
 
+@app.route('/data/<path:filename>')
+def serve_data_file(filename):
+    """Serve data files like JSON"""
+    try:
+        data_dir = os.path.join(parent_dir, 'data')
+        return send_file(os.path.join(data_dir, filename), mimetype='application/json')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 404
+
 @app.route('/history')
 @login_required
 def history():
