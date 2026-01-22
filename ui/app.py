@@ -3,11 +3,18 @@ from flask_pymongo import PyMongo
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_bcrypt import Bcrypt
 from bson.objectid import ObjectId
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
 import sys, os, datetime, csv, io
 import certifi
 from dotenv import load_dotenv
+
+# Optional PDF generation (not available on Vercel)
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+    PDF_AVAILABLE = True
+except ImportError:
+    PDF_AVAILABLE = False
+    print("⚠️ PDF generation not available (reportlab not installed)")
 
 # Load environment variables from .env file
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
@@ -230,6 +237,11 @@ def history():
 @app.route('/download_pdf/<booking_id>')
 @login_required
 def download_pdf(booking_id):
+    # Check if PDF generation is available
+    if not PDF_AVAILABLE:
+        flash('PDF generation is not available on this server')
+        return redirect(url_for('history'))
+    
     booking = mongo.db.bookings.find_one({'_id': ObjectId(booking_id), 'user_id': current_user.id})
     if not booking: return redirect(url_for('history'))
     

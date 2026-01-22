@@ -12,7 +12,15 @@ from .reasoning_engine import ReasoningEngine
 from .personalization import PersonalizationEngine
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from models.ml_trainer import MLModel
+
+# Optional ML Model import (for Vercel compatibility)
+try:
+    from models.ml_trainer import MLModel
+    ML_AVAILABLE = True
+except ImportError:
+    MLModel = None
+    ML_AVAILABLE = False
+    print("⚠️ ML models not available (lightweight mode)")
 
 
 class AdvancedTourAgent:
